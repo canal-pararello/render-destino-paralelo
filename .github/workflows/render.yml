@@ -1,0 +1,137 @@
+name: render
+
+# Renderiza um vídeo do canal Destino Paralelo dividido em partes que rodam ao mesmo tempo
+# (uma máquina de 4 núcleos por parte) e junta tudo num MP4 só.
+# Disparado pelo ferramentas/renderizar_github.py do projeto C:\agente-video, que antes sobe o
+# pacote (mídia + narração + props.json) como release com a tag `pacote`.
+
+on:
+  workflow_dispatch:
+    inputs:
+      pacote:
+        description: "Tag da release com pacote.zip"
+        required: true
+      composicao:
+        description: "Composição do Remotion"
+        default: VideoEssence
+      inicio:
+        description: "Primeiro quadro"
+        default: "0"
+      fim:
+        description: "Último quadro (inclusive)"
+        required: true
+      partes:
+        description: "Em quantas máquinas dividir"
+        default: "10"
+      trechos:
+        description: "Opcional: lista 'ini-fim,ini-fim' de quadros (prévia com trechos soltos); ignora inicio/fim/partes"
+        default: ""
+
+permissions:
+  contents: read
+
+env:
+  GH_TOKEN: ${{ github.token }}
+
+jobs:
+  planejar:
+    runs-on: ubuntu-latest
+    outputs:
+      faixas: ${{ steps.p.outputs.faixas }}
+    steps:
+      - id: p
+        run: |
+          python3 - <<'EOF' >> "$GITHUB_OUTPUT"
+          import json
+          t = "${{ inputs.trechos }}".strip()
+          if t:
+              fx = [dict(zip(("ini", "fim"), map(int, x.split("-")))) for x in t.split(",")]
+          else:
+              a, b, n = int("${{ inputs.inicio }}"), int("${{ inputs.fim }}"), int("${{ inputs.partes }}")
+              tot = b - a + 1
+              n = max(1, min(n, tot // 30))
+              fx = [{"ini": a + tot * i // n, "fim": a + tot * (i + 1) // n - 1} for i in range(n)]
+          for i, f in enumerate(fx):
+              f["n"] = f"{i:03d}"
+          print("faixas=" + json.dumps(fx))
+          EOF
+
+  render:
+    needs: planejar
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    strategy:
+      fail-fast: true
+      matrix:
+        faixa: ${{ fromJSON(needs.planejar.outputs.faixas) }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Fontes
+        run: mkdir -p ~/.fonts && cp fonts/*.ttf ~/.fonts/ && fc-cache -f
+      - run: npm ci
+      - name: Pacote
+        run: |
+          gh release download "${{ inputs.pacote }}" -p pacote.zip -R "${{ github.repository }}"
+          mkdir -p public && unzip -q pacote.zip -d public
+      - name: Render quadros ${{ matrix.faixa.ini }}-${{ matrix.faixa.fim }}
+        run: |
+          nproc
+          npx remotion render src/index.ts "${{ inputs.composicao }}" "out/parte-${{ matrix.faixa.n }}.mp4" \
+            --props=public/props.json --frames=${{ matrix.faixa.ini }}-${{ matrix.faixa.fim }} \
+            --muted --concurrency=$(nproc) --log=error
+      - uses: actions/upload-artifact@v4
+        with:
+          name: parte-${{ matrix.faixa.n }}
+          path: out/parte-${{ matrix.faixa.n }}.mp4
+          retention-days: 1
+
+  juntar:
+    needs: [planejar, render]
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Pacote
+        run: |
+          gh release download "${{ inputs.pacote }}" -p pacote.zip -R "${{ github.repository }}"
+          mkdir -p public && unzip -q pacote.zip -d public
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: parte-*
+          path: partes
+          merge-multiple: true
+      - name: Áudio de cada faixa (só áudio, sem desenhar quadros)
+        run: |
+          sudo apt-get install -y -qq ffmpeg > /dev/null
+          python3 - <<'EOF'
+          import json, subprocess
+          fx = json.loads('${{ needs.planejar.outputs.faixas }}')
+          for f in fx:
+              subprocess.run(["npx", "remotion", "render", "src/index.ts", "${{ inputs.composicao }}",
+                              f"audio/a-{f['n']}.wav", "--props=public/props.json", "--codec=wav",
+                              f"--frames={f['ini']}-{f['fim']}", "--log=error"], check=True)
+          with open("v.txt", "w") as v, open("a.txt", "w") as a:
+              for f in fx:
+                  v.write(f"file 'partes/parte-{f['n']}.mp4'\n")
+                  a.write(f"file 'audio/a-{f['n']}.wav'\n")
+          EOF
+      - name: Juntar
+        run: |
+          ffmpeg -hide_banner -loglevel error -f concat -safe 0 -i v.txt -c copy video.mp4
+          ffmpeg -hide_banner -loglevel error -f concat -safe 0 -i a.txt -c copy audio.wav
+          ffmpeg -hide_banner -loglevel error -i video.mp4 -i audio.wav -map 0:v -map 1:a -c:v copy -c:a aac -b:a 192k -shortest final.mp4
+          ffprobe -v error -show_entries format=duration -of csv=p=0 final.mp4
+      - uses: actions/upload-artifact@v4
+        with:
+          name: video-final
+          path: final.mp4
+          retention-days: 3
