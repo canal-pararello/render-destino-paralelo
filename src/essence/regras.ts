@@ -45,11 +45,20 @@ export const acharCitacao = (frase: string): string | null => {
 };
 
 /** Palavra-chave que vai em vermelho num bloco curto de texto (a mais longa, ≥ 6 letras). */
+const FRACAS = new Set([
+  "existe", "existem", "porque", "quando", "depois", "tambem", "agora", "sempre", "alguem",
+  "ninguem", "entao", "aquele", "aquela", "isso", "esse", "essa", "este", "esta", "voce", "voces",
+  "muito", "muita", "todos", "todas", "sobre", "antes", "ainda", "outro", "outra", "nosso", "nossa",
+  "capaz", "dentro", "debaixo", "durante", "enquanto",
+]);
+
 export const palavraChave = (palavras: string[]): number => {
   let melhor = -1;
   let tam = 5;
   palavras.forEach((p, i) => {
-    const n = p.replace(/[^\p{L}\p{N}]/gu, "").length;
+    const limpa = p.replace(/[^\p{L}\p{N}]/gu, "");
+    if (FRACAS.has(sem(limpa))) return;
+    const n = limpa.length;
     if (n > tam) {
       tam = n;
       melhor = i;

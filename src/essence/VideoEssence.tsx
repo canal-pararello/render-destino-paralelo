@@ -5,11 +5,11 @@ import {
   Sequence,
   staticFile,
 } from "remotion";
-import { DIRECOES, ImagemKenBurns } from "../ImagemKenBurns";
+import { ImagemViva, MOVIMENTOS, Vinheta } from "./Camera";
 import { Cena, VideoFinalProps } from "../VideoFinal";
 import { CtaInscreva, ImagemImpacto, PalavraTela, QuadroInclinado, TelaCitacao } from "./Efeitos";
 import { acharCitacao, ehImpacto, ehTensao, IMPACTO_GAP_S } from "./regras";
-import { AberturaCinetica, LegendaGancho, usePalavras } from "./Texto";
+import { AberturaCinetica, blocosAbertura, LegendaGancho, usePalavras } from "./Texto";
 
 /** Campos extras do cenas.json que este estilo entende (todos opcionais). */
 export type CenaEssence = Cena & {
@@ -27,7 +27,12 @@ export type CenaEssence = Cena & {
 export type VideoEssenceProps = VideoFinalProps & {
   /** Música de fundo (dentro de motion/public). Fica ~24 dB abaixo da voz. */
   musica?: string;
+  /** Efeitos sonoros (padrão true): pancada no impacto, whoosh no texto cinético e no Inscreva-se. */
+  efeitosSonoros?: boolean;
 };
+
+/** Volumes dos efeitos (medidos contra a narração a -14 LUFS). */
+export const SFX = { impacto: 0.55, whoosh: 0.22, clique: 0.35, tensao: 0.3 };
 
 export type TipoCena = "kenburns" | "impacto" | "inclinado" | "citacao" | "video" | "vazia";
 
@@ -87,7 +92,9 @@ const Midia: React.FC<{ cena: CenaEssence; tipo: TipoCena; indice: number; proje
     case "inclinado":
       return <QuadroInclinado imagem={caminho} duracaoSegundos={dur} lado={indice % 2 ? 1 : -1} />;
     default:
-      return <ImagemKenBurns imagem={caminho} duracaoSegundos={dur} direcao={DIRECOES[indice % DIRECOES.length]} />;
+      return (
+        <ImagemViva imagem={caminho} duracaoSegundos={dur} movimento={MOVIMENTOS[indice % MOVIMENTOS.length]} semente={cena.cena} />
+      );
   }
 };
 
@@ -97,7 +104,14 @@ const Midia: React.FC<{ cena: CenaEssence; tipo: TipoCena; indice: number; proje
  * texto cinético branco/vermelho, legenda só no gancho, impacto/inclinado/citação automáticos,
  * \"Inscreva-se\" uma vez perto de 37% e música ~24 dB abaixo da voz.
  */
-export const VideoEssence: React.FC<VideoEssenceProps> = ({ projeto, audio, palavras, musica, cenas = [] }) => {
+export const VideoEssence: React.FC<VideoEssenceProps> = ({
+  projeto,
+  audio,
+  palavras,
+  musica,
+  efeitosSonoros = true,
+  cenas = [],
+}) => {
   const fps = 30;
   const q = (s: number) => Math.round(s * fps);
   const lista = cenas as CenaEssence[];
@@ -122,10 +136,45 @@ export const VideoEssence: React.FC<VideoEssenceProps> = ({ projeto, audio, pala
         </Sequence>
       ))}
 
+      <Vinheta />
+
       {cta ? (
         <Sequence from={q(cta.inicio)} durationInFrames={q(2)} name="Inscreva-se">
           <CtaInscreva />
         </Sequence>
+      ) : null}
+
+      {efeitosSonoros ? (
+        <>
+          {lista.map((c, i) =>
+            tipos[i] === "impacto" ? (
+              <Sequence key={`si${c.cena}`} from={q(c.inicio)} durationInFrames={q(1.2)} name="som impacto">
+                <Audio src={staticFile("sfx/impacto.wav")} volume={SFX.impacto} />
+              </Sequence>
+            ) : tipos[i] === "inclinado" ? (
+              <Sequence key={`st${c.cena}`} from={q(c.inicio)} durationInFrames={q(1.5)} name="som tensão">
+                <Audio src={staticFile("sfx/tensao.wav")} volume={SFX.tensao} />
+              </Sequence>
+            ) : null,
+          )}
+          {cta ? (
+            <>
+              <Sequence from={q(cta.inicio)} durationInFrames={q(0.6)} name="som cta">
+                <Audio src={staticFile("sfx/whoosh.wav")} volume={SFX.whoosh} />
+              </Sequence>
+              <Sequence from={q(cta.inicio + 0.8)} durationInFrames={q(0.3)} name="clique">
+                <Audio src={staticFile("sfx/clique.wav")} volume={SFX.clique} />
+              </Sequence>
+            </>
+          ) : null}
+          {pal
+            ? blocosAbertura(pal, abertura).map((t0, k) => (
+                <Sequence key={`sw${k}`} from={Math.max(0, q(t0) - 3)} durationInFrames={q(0.6)} name="whoosh texto">
+                  <Audio src={staticFile("sfx/whoosh.wav")} volume={SFX.whoosh * 0.7} />
+                </Sequence>
+              ))
+            : null}
+        </>
       ) : null}
 
       <Audio src={staticFile(audio)} />

@@ -33,6 +33,12 @@ export const usePalavras = (arquivo: string): Palavra[] | null => {
   return palavras;
 };
 
+/** Início (s) de cada bloco de 1-2 palavras da abertura (para o whoosh de cada entrada). */
+export const blocosAbertura = (palavras: Palavra[], ate: number): number[] => {
+  const lista = palavras.filter((p) => p.inicio < ate);
+  return dividirEmBlocos(lista, 2).map((g) => lista[g[0]].inicio);
+};
+
 /**
  * Abertura com texto cinético (0 a `ate` s): fundo quase preto, 1-2 palavras por vez em
  * caixa alta, grandes, no centro; a palavra-chave em vermelho com brilho. Cada bloco entra
@@ -54,8 +60,11 @@ export const AberturaCinetica: React.FC<{ palavras: Palavra[]; ate: number }> = 
   }
   const inicioBloco = atual ? lista[atual[0]].inicio : 0;
   const q = Math.max(0, frame - Math.round(inicioBloco * fps));
-  const escala = interpolate(q, [0, 4], [1.35, 1], { extrapolateRight: "clamp" });
-  const blur = interpolate(q, [0, 4], [14, 0], { extrapolateRight: "clamp" });
+  // Entra grande e borrado, passa um pouco do ponto (0,94) e assenta: "soco" de texto.
+  const escala = interpolate(q, [0, 3, 6], [1.6, 0.94, 1], { extrapolateRight: "clamp" });
+  const blur = interpolate(q, [0, 3], [16, 0], { extrapolateRight: "clamp" });
+  const tremor = interpolate(q, [0, 6], [6, 0], { extrapolateRight: "clamp" });
+  const tx = Math.sin(frame * 2.3) * tremor;
   const textos = atual ? atual.map((i) => limpar(lista[i].palavra)) : [];
   const chave = palavraChave(textos);
   const fundo = interpolate(t, [ate - 0.25, ate], [0.9, 0], { extrapolateLeft: "clamp", extrapolateRight: "clamp" });
@@ -64,11 +73,11 @@ export const AberturaCinetica: React.FC<{ palavras: Palavra[]; ate: number }> = 
     <AbsoluteFill style={{ backgroundColor: `rgba(0,0,0,${fundo})`, justifyContent: "center", alignItems: "center" }}>
       <div
         style={{
-          transform: `scale(${escala})`,
+          transform: `translateX(${tx}px) scale(${escala})`,
           filter: `blur(${blur}px)`,
           fontFamily: FONTE,
           fontWeight: 900,
-          fontSize: Math.round(width * 0.07),
+          fontSize: Math.round(width * 0.088),
           textTransform: "uppercase",
           letterSpacing: "0.02em",
           textAlign: "center",
@@ -114,14 +123,24 @@ export const LegendaGancho: React.FC<{ palavras: Palavra[]; de: number; ate: num
   }
   if (!atual) return null;
   return (
-    <AbsoluteFill style={{ justifyContent: "flex-end", alignItems: "center", paddingBottom: "5.5%" }}>
+    <AbsoluteFill
+      style={{
+        justifyContent: "flex-end",
+        alignItems: "center",
+        paddingBottom: "6%",
+        // faixa escura embaixo: as imagens do canal são claras e saturadas
+        background: "linear-gradient(to top, rgba(0,0,0,0.55) 0%, rgba(0,0,0,0) 26%)",
+      }}
+    >
       <div
         style={{
           fontFamily: FONTE,
-          fontWeight: 800,
-          fontSize: Math.round(width * 0.024),
+          fontWeight: 900,
+          fontSize: Math.round(width * 0.034),
           color: "white",
-          textShadow: "0 2px 6px rgba(0,0,0,0.9), 0 0 18px rgba(0,0,0,0.6)",
+          WebkitTextStroke: `${Math.round(width * 0.0035)}px black`,
+          paintOrder: "stroke fill",
+          textShadow: "0 3px 10px rgba(0,0,0,0.85)",
           textAlign: "center",
         }}
       >

@@ -19,11 +19,23 @@ import { FONTE, VERMELHO } from "./regras";
  * - até 0,5 s: tremida que vai diminuindo; depois zoom de soco (1,08 -> 1,16) até o fim.
  */
 const RAJADA = [
-  { s: 1.0, x: 0, y: 0 },
-  { s: 1.45, x: -12, y: -6 },
-  { s: 1.25, x: 10, y: 4 },
-  { s: 1.6, x: 0, y: -10 },
+  { s: 1.0, x: 0, y: 0, r: 0 },
+  { s: 1.55, x: -14, y: -8, r: -4 },
+  { s: 1.3, x: 12, y: 6, r: 3 },
+  { s: 1.75, x: 0, y: -12, r: 0 },
 ];
+
+/** Linhas de velocidade saindo do centro (mangá), brancas, só nas bordas. */
+const LinhasVelocidade: React.FC<{ opacidade: number; giro: number }> = ({ opacidade, giro }) => (
+  <AbsoluteFill
+    style={{
+      opacity: opacidade,
+      background: `repeating-conic-gradient(from ${giro}deg at 50% 50%, rgba(255,255,255,0.85) 0deg 0.7deg, transparent 0.7deg 6deg)`,
+      WebkitMaskImage: "radial-gradient(ellipse at center, transparent 38%, black 75%)",
+      maskImage: "radial-gradient(ellipse at center, transparent 38%, black 75%)",
+    }}
+  />
+);
 
 export const ImagemImpacto: React.FC<{ imagem: string; duracaoSegundos: number; semente: number }> = ({
   imagem,
@@ -43,13 +55,13 @@ export const ImagemImpacto: React.FC<{ imagem: string; duracaoSegundos: number; 
     extrapolateRight: "clamp",
     easing: Easing.out(Easing.quad),
   });
-  const forca = interpolate(frame, [0, fps * 0.5], [22, 0], { extrapolateRight: "clamp" });
+  const forca = interpolate(frame, [0, fps * 0.6], [30, 0], { extrapolateRight: "clamp" });
   const tx = (random(`x${semente}-${frame}`) - 0.5) * 2 * forca;
   const ty = (random(`y${semente}-${frame}`) - 0.5) * 2 * forca;
   const flash = interpolate(frame, [0, 2, 4], [0.95, 0.6, 0], { extrapolateRight: "clamp" });
 
   const transform = r
-    ? `translate(${r.x}%, ${r.y}%) scale(${r.s})`
+    ? `translate(${r.x}%, ${r.y}%) rotate(${r.r}deg) scale(${r.s})`
     : `translate(${tx}px, ${ty}px) scale(${zoom})`;
 
   return (
@@ -63,6 +75,10 @@ export const ImagemImpacto: React.FC<{ imagem: string; duracaoSegundos: number; 
           background: "radial-gradient(ellipse at center, transparent 55%, rgba(0,0,0,0.55) 100%)",
           opacity: interpolate(frame, [0, fps * 0.6], [1, 0.35], { extrapolateRight: "clamp" }),
         }}
+      />
+      <LinhasVelocidade
+        opacidade={interpolate(frame, [0, fps * 0.25, fps * 0.7], [1, 0.8, 0], { extrapolateRight: "clamp" })}
+        giro={(frame % 3) * 2}
       />
       <AbsoluteFill style={{ backgroundColor: "white", opacity: flash }} />
     </AbsoluteFill>
@@ -82,12 +98,12 @@ export const QuadroInclinado: React.FC<{ imagem: string; duracaoSegundos: number
   const { fps } = useVideoConfig();
   const total = Math.max(1, Math.round(duracaoSegundos * fps));
   const p = interpolate(frame, [0, total], [0, 1], { extrapolateRight: "clamp" });
-  const escala = interpolate(p, [0, 1], [0.76, 0.82]);
+  const escala = interpolate(p, [0, 1], [0.82, 0.86]);
   return (
     <AbsoluteFill style={{ backgroundColor: "black", perspective: 1400, overflow: "hidden" }}>
       <AbsoluteFill
         style={{
-          transform: `scale(${escala}) rotateY(${lado * 10}deg) rotateZ(${lado * -2.5}deg)`,
+          transform: `scale(${escala}) rotateY(${lado * 8}deg) rotateZ(${lado * -2}deg)`,
           transformOrigin: "center",
           boxShadow: "0 0 80px rgba(0,0,0,0.9)",
         }}
@@ -164,7 +180,7 @@ export const CtaInscreva: React.FC = () => {
     extrapolateLeft: "clamp",
     extrapolateRight: "clamp",
   });
-  const t = Math.round(width * 0.03);
+  const t = Math.round(width * 0.042);
   const balanco = Math.sin(frame / 2.2) * interpolate(frame, [fps, fps * 1.6], [18, 0], {
     extrapolateLeft: "clamp",
     extrapolateRight: "clamp",
@@ -173,7 +189,11 @@ export const CtaInscreva: React.FC = () => {
     <AbsoluteFill
       style={{ backgroundColor: `rgba(0,0,0,${0.72 * sai})`, justifyContent: "center", alignItems: "center", opacity: sai }}
     >
-      <div style={{ display: "flex", alignItems: "center", gap: t, transform: `scale(${entra})` }}>
+      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: t * 0.5, transform: `scale(${entra})` }}>
+      <div style={{ color: "white", fontFamily: FONTE, fontWeight: 900, fontSize: t * 0.8, letterSpacing: "0.12em", textShadow: "0 4px 16px rgba(0,0,0,0.9)" }}>
+        DESTINO <span style={{ color: VERMELHO }}>PARALELO</span>
+      </div>
+      <div style={{ display: "flex", alignItems: "center", gap: t }}>
         <div
           style={{
             background: clique ? "#3a3a3a" : "#E00000",
@@ -200,6 +220,7 @@ export const CtaInscreva: React.FC = () => {
             d="M12 22a2.5 2.5 0 0 0 2.45-2h-4.9A2.5 2.5 0 0 0 12 22zm7-6V11a7 7 0 0 0-5.5-6.84V3.5a1.5 1.5 0 0 0-3 0v.66A7 7 0 0 0 5 11v5l-2 2v1h18v-1l-2-2z"
           />
         </svg>
+      </div>
       </div>
     </AbsoluteFill>
   );
