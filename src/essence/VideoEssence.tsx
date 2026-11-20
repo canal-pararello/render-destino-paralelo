@@ -29,7 +29,15 @@ export type VideoEssenceProps = VideoFinalProps & {
   musica?: string;
   /** Efeitos sonoros (padrão true): pancada no impacto, whoosh no texto cinético e no Inscreva-se. */
   efeitosSonoros?: boolean;
+  /** Trilha por capítulo (projetos/<projeto>/trilhas.json do ferramentas/escolher_trilhas.py). */
+  trilhas?: Trilha[];
 };
+
+export type Trilha = { arquivo: string; inicio: number; fim: number; pularInicio?: number; clima?: string };
+
+/** Trilhas normalizadas em -16 LUFS; narração em ~-14,7. 0,07 = -23 dB -> música ~24 dB abaixo da voz. */
+export const VOLUME_TRILHA = 0.07;
+const FADE_TRILHA = 1.2;
 
 /** Volumes dos efeitos (medidos contra a narração a -14 LUFS). */
 export const SFX = { impacto: 0.55, whoosh: 0.22, clique: 0.35, tensao: 0.3 };
@@ -110,6 +118,7 @@ export const VideoEssence: React.FC<VideoEssenceProps> = ({
   palavras,
   musica,
   efeitosSonoros = true,
+  trilhas = [],
   cenas = [],
 }) => {
   const fps = 30;
@@ -179,6 +188,25 @@ export const VideoEssence: React.FC<VideoEssenceProps> = ({
 
       <Audio src={staticFile(audio)} />
       {musica ? <Audio src={staticFile(musica)} volume={VOLUME_MUSICA} loop /> : null}
+      {trilhas.map((t, k) => {
+        // cada trilha entra suave e sai suave; sobra 1 s por cima da próxima para cruzar
+        const ultima = k === trilhas.length - 1;
+        const dur = q(t.fim - t.inicio + (ultima ? 0 : 1));
+        const fade = q(FADE_TRILHA);
+        return (
+          <Sequence key={`tr${k}`} from={q(t.inicio)} durationInFrames={Math.max(1, dur)} name={`Trilha ${t.clima ?? ""}`}>
+            <Audio
+              src={staticFile(t.arquivo)}
+              startFrom={q(t.pularInicio ?? 0)}
+              loop
+              volume={(f) =>
+                VOLUME_TRILHA *
+                Math.min(1, k === 0 ? 1 : f / fade, Math.max(0, (dur - f) / fade))
+              }
+            />
+          </Sequence>
+        );
+      })}
 
       {pal ? (
         <>

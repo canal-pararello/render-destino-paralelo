@@ -6,11 +6,17 @@ import { TesteDestaque } from "./TesteDestaque";
 import { SEGUNDOS_TESTE_LEGENDA, TesteLegenda } from "./TesteLegenda";
 import { calcularVideoFinal, VideoFinal } from "./VideoFinal";
 import { VideoEssence, VideoEssenceProps } from "./essence/VideoEssence";
-import { CalculateMetadataFunction } from "remotion";
+import { CalculateMetadataFunction, staticFile } from "remotion";
 
 const calcularVideoEssence: CalculateMetadataFunction<VideoEssenceProps> = async (args) => {
   const r = await calcularVideoFinal(args as Parameters<typeof calcularVideoFinal>[0]);
-  return { ...r, props: { ...args.props, ...(r.props ?? {}) } };
+  // trilhas.json é opcional (ferramentas/escolher_trilhas.py)
+  let trilhas = args.props.trilhas;
+  if (!trilhas) {
+    const t = await fetch(staticFile(`${args.props.projeto}/trilhas.json`));
+    trilhas = t.ok ? await t.json() : [];
+  }
+  return { ...r, props: { ...args.props, ...(r.props ?? {}), trilhas } };
 };
 
 const FPS = 30;
