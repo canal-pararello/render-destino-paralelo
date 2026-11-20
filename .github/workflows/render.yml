@@ -83,49 +83,30 @@ jobs:
           npx remotion render src/index.ts "${{ inputs.composicao }}" "out/parte-${{ matrix.faixa.n }}.mp4" \
             --props=public/props.json --frames=${{ matrix.faixa.ini }}-${{ matrix.faixa.fim }} \
             --muted --concurrency=$(nproc) --log=error
+          npx remotion render src/index.ts "${{ inputs.composicao }}" "out/parte-${{ matrix.faixa.n }}.wav" \
+            --props=public/props.json --frames=${{ matrix.faixa.ini }}-${{ matrix.faixa.fim }} \
+            --codec=wav --log=error
       - uses: actions/upload-artifact@v4
         with:
           name: parte-${{ matrix.faixa.n }}
-          path: out/parte-${{ matrix.faixa.n }}.mp4
+          path: out/parte-${{ matrix.faixa.n }}.*
           retention-days: 1
 
   juntar:
     needs: [planejar, render]
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-      - run: npm ci
-      - name: Pacote
-        run: |
-          gh release download "${{ inputs.pacote }}" -p pacote.zip -R "${{ github.repository }}"
-          mkdir -p public && unzip -q pacote.zip -d public
       - uses: actions/download-artifact@v4
         with:
           pattern: parte-*
           path: partes
           merge-multiple: true
-      - name: Áudio de cada faixa (só áudio, sem desenhar quadros)
-        run: |
-          sudo apt-get install -y -qq ffmpeg > /dev/null
-          python3 - <<'EOF'
-          import json, subprocess
-          fx = json.loads('${{ needs.planejar.outputs.faixas }}')
-          for f in fx:
-              subprocess.run(["npx", "remotion", "render", "src/index.ts", "${{ inputs.composicao }}",
-                              f"audio/a-{f['n']}.wav", "--props=public/props.json", "--codec=wav",
-                              f"--frames={f['ini']}-{f['fim']}", "--log=error"], check=True)
-          with open("v.txt", "w") as v, open("a.txt", "w") as a:
-              for f in fx:
-                  v.write(f"file 'partes/parte-{f['n']}.mp4'\n")
-                  a.write(f"file 'audio/a-{f['n']}.wav'\n")
-          EOF
       - name: Juntar
         run: |
+          sudo apt-get install -y -qq ffmpeg > /dev/null 2>&1 || true
+          for f in partes/parte-*.mp4; do echo "file '$f'"; done > v.txt
+          for f in partes/parte-*.wav; do echo "file '$f'"; done > a.txt
           ffmpeg -hide_banner -loglevel error -f concat -safe 0 -i v.txt -c copy video.mp4
           ffmpeg -hide_banner -loglevel error -f concat -safe 0 -i a.txt -c copy audio.wav
           ffmpeg -hide_banner -loglevel error -i video.mp4 -i audio.wav -map 0:v -map 1:a -c:v copy -c:a aac -b:a 192k -shortest final.mp4
