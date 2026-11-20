@@ -95,7 +95,7 @@ jobs:
   juntar:
     needs: [planejar, render]
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 15
     steps:
       - uses: actions/download-artifact@v4
         with:
@@ -104,7 +104,9 @@ jobs:
           merge-multiple: true
       - name: Juntar
         run: |
-          sudo apt-get install -y -qq ffmpeg > /dev/null 2>&1 || true
+          # ffmpeg estático (o apt-get travou esperando trava do dpkg numa execução)
+          curl -sL https://johnvansickle.com/ffmpeg/releases/ffmpeg-release-amd64-static.tar.xz | tar xJ
+          export PATH="$PWD/$(ls -d ffmpeg-*-static | head -1):$PATH"
           for f in partes/parte-*.mp4; do echo "file '$f'"; done > v.txt
           for f in partes/parte-*.wav; do echo "file '$f'"; done > a.txt
           ffmpeg -hide_banner -loglevel error -f concat -safe 0 -i v.txt -c copy video.mp4
