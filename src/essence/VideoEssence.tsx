@@ -35,8 +35,8 @@ export type VideoEssenceProps = VideoFinalProps & {
 
 export type Trilha = { arquivo: string; inicio: number; fim: number; pularInicio?: number; clima?: string };
 
-/** Trilhas normalizadas em -16 LUFS; narração em ~-14,7. 0,07 = -23 dB -> música ~24 dB abaixo da voz. */
-export const VOLUME_TRILHA = 0.07;
+/** Trilhas normalizadas em -16 LUFS; narração em ~-14,7. 0,11 = -19 dB -> música ~24 dB abaixo da voz (medido: 0,07 dava 28 dB). */
+export const VOLUME_TRILHA = 0.11;
 const FADE_TRILHA = 1.2;
 
 /** Volumes dos efeitos (medidos contra a narração a -14 LUFS). */
