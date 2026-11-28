@@ -5,3 +5,4 @@ accelerate
 compel==2.0.2
 safetensors
 pillow
+peft

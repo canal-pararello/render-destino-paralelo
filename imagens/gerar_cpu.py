@@ -28,6 +28,9 @@ print(f"parte {a.parte}/{a.partes}: {len(cenas)} cenas, {L}x{A}, {passos} passos
 
 t0 = time.time()
 pipe = StableDiffusionXLPipeline.from_pretrained(pedido["modelo"], torch_dtype=torch.float32, use_safetensors=True)
+if pedido.get("lora_repo"):
+    pipe.load_lora_weights(pedido["lora_repo"], weight_name=pedido.get("lora_weight"))
+    print(f"LoRA carregado: {pedido['lora_repo']}", flush=True)
 pipe.scheduler = EulerAncestralDiscreteScheduler.from_config(pipe.scheduler.config)
 pipe.enable_vae_tiling()
 print(f"modelo carregado em {time.time() - t0:.0f}s", flush=True)
